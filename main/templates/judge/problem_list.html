@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Problems — Online Judge{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Problem Dashboard</h2>
+
+{% if problems %}
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>#</th>
+                <th>Title</th>
+                <th>Difficulty</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for problem in problems %}
+            <tr>
+                <td>{{ problem.pk }}</td>
+                <td><a href="{% url 'problem_detail' problem.pk %}">{{ problem.title }}</a></td>
+                <td>
+                    <span class="difficulty-{{ problem.difficulty|lower }}">
+                        {{ problem.difficulty }}
+                    </span>
+                </td>
+                <td>
+                    {% if problem.pk in solved_ids %}
+                    <span class="badge bg-success">Solved ✓</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Unsolved</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">No problems available yet. Check back soon!</div>
+{% endif %}
+{% endblock %}

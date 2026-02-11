@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ problem.title }} — Online Judge{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Problem Description -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between">
+                <h4 class="mb-0">{{ problem.title }}</h4>
+                <span
+                    class="badge bg-{% if problem.difficulty == 'Easy' %}success{% elif problem.difficulty == 'Medium' %}warning{% else %}danger{% endif %} align-self-center">
+                    {{ problem.difficulty }}
+                </span>
+            </div>
+            <div class="card-body">
+                <p style="white-space: pre-wrap;">{{ problem.description }}</p>
+                <hr>
+                <small class="text-muted">Time Limit: {{ problem.time_limit }}s</small>
+            </div>
+        </div>
+
+        {% if sample_cases %}
+        <div class="card shadow-sm mt-3">
+            <div class="card-header"><strong>Sample Test Cases</strong></div>
+            <div class="card-body">
+                {% for tc in sample_cases %}
+                <div class="mb-3">
+                    <strong>Sample {{ forloop.counter }}:</strong>
+                    <div class="row mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Input</label>
+                            <pre class="bg-light p-2 rounded">{{ tc.input_data }}</pre>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Expected Output</label>
+                            <pre class="bg-light p-2 rounded">{{ tc.expected_output }}</pre>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Code Submission Form -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Submit Your Solution</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ form.language.id_for_label }}" class="form-label">Language</label>
+                        {{ form.language }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.code.id_for_label }}" class="form-label">Code</label>
+                        {{ form.code }}
+                        {% if form.code.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.code.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Submit</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
