@@ -1,10 +1,15 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from datetime import timedelta
+
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.contrib import messages
-from django.views.generic import ListView, DetailView
+from django.db.models import Count, Q
 from django.http import Http404
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from django.views.generic import ListView, DetailView
 
 from .models import Problem, Submission
 from .forms import RegistrationForm, SubmissionForm
@@ -118,3 +123,78 @@ class SubmissionHistoryView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return Submission.objects.filter(user=self.request.user)
+
+
+# ---------------------------------------------------------------------------
+# User Profile
+# ---------------------------------------------------------------------------
+@login_required
+def profile_view(request, username):
+    """User profile page with comprehensive submission statistics."""
+    profile_user = get_object_or_404(User, username=username)
+    submissions = Submission.objects.filter(user=profile_user)
+
+    # --- Core counts ---
+    total_submissions = submissions.count()
+    problems_attempted = submissions.values('problem').distinct().count()
+    solved_problem_ids = set(
+        submissions.filter(status='Accepted')
+        .values_list('problem_id', flat=True)
+        .distinct()
+    )
+    problems_solved = len(solved_problem_ids)
+    accuracy = round((problems_solved / problems_attempted) * 100, 1) if problems_attempted else 0
+
+    # --- Current streak (consecutive days ending today with ≥1 Accepted) ---
+    streak = 0
+    today = timezone.now().date()
+    accepted_dates = set(
+        submissions.filter(status='Accepted')
+        .values_list('created_at__date', flat=True)
+        .distinct()
+    )
+    check_date = today
+    while check_date in accepted_dates:
+        streak += 1
+        check_date -= timedelta(days=1)
+
+    # --- Verdict breakdown ---
+    verdict_counts = dict(
+        submissions.values_list('status')
+        .annotate(count=Count('id'))
+        .values_list('status', 'count')
+    )
+
+    # --- Language breakdown ---
+    language_counts = dict(
+        submissions.values_list('language')
+        .annotate(count=Count('id'))
+        .values_list('language', 'count')
+    )
+
+    # --- Difficulty breakdown (solved problems only) ---
+    difficulty_counts = {}
+    if solved_problem_ids:
+        difficulty_counts = dict(
+            Problem.objects.filter(id__in=solved_problem_ids)
+            .values_list('difficulty')
+            .annotate(count=Count('id'))
+            .values_list('difficulty', 'count')
+        )
+
+    # --- Recent submissions ---
+    recent_submissions = submissions.select_related('problem')[:10]
+
+    context = {
+        'profile_user': profile_user,
+        'total_submissions': total_submissions,
+        'problems_attempted': problems_attempted,
+        'problems_solved': problems_solved,
+        'accuracy': accuracy,
+        'streak': streak,
+        'verdict_counts': verdict_counts,
+        'language_counts': language_counts,
+        'difficulty_counts': difficulty_counts,
+        'recent_submissions': recent_submissions,
+    }
+    return render(request, 'judge/profile.html', context)

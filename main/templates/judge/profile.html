@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ profile_user.username }}'s Profile — Online Judge{% endblock %}
+
+{% block content %}
+<!-- ===== Profile Header ===== -->
+<div class="profile-header mb-4">
+    <div class="row align-items-center">
+        <div class="col-auto">
+            <div class="profile-avatar">
+                {{ profile_user.username|make_list|first|upper }}
+            </div>
+        </div>
+        <div class="col">
+            <h2 class="mb-1">{{ profile_user.username }}</h2>
+            <p class="text-muted mb-0">
+                <i class="bi bi-calendar3"></i>
+                Joined {{ profile_user.date_joined|date:"F Y" }}
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Key Stats Cards ===== -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-value text-primary">{{ total_submissions }}</div>
+            <div class="stat-label">Total Submissions</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-value text-success">{{ problems_solved }}</div>
+            <div class="stat-label">Problems Solved</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-value text-warning">{{ accuracy }}%</div>
+            <div class="stat-label">Accuracy</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-value text-info">🔥 {{ streak }}</div>
+            <div class="stat-label">Day Streak</div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Verdicts & Languages Row ===== -->
+<div class="row g-3 mb-4">
+    <!-- Verdict Breakdown -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Verdict Breakdown</h5>
+                {% if verdict_counts %}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for status, count in verdict_counts.items %}
+                    <span class="badge verdict-badge
+                        {% if status == 'Accepted' %}bg-success
+                        {% elif status == 'Wrong Answer' %}bg-danger
+                        {% elif status == 'Time Limit Exceeded' %}bg-warning text-dark
+                        {% elif status == 'Runtime Error' %}bg-purple
+                        {% elif status == 'Compilation Error' %}bg-secondary
+                        {% else %}bg-info
+                        {% endif %}">
+                        {{ status }}: {{ count }}
+                    </span>
+                    {% endfor %}
+                </div>
+                <!-- Verdict progress bar -->
+                <div class="progress" style="height: 24px;">
+                    {% for status, count in verdict_counts.items %}
+                    <div class="progress-bar
+                        {% if status == 'Accepted' %}bg-success
+                        {% elif status == 'Wrong Answer' %}bg-danger
+                        {% elif status == 'Time Limit Exceeded' %}bg-warning
+                        {% elif status == 'Runtime Error' %}bg-purple
+                        {% elif status == 'Compilation Error' %}bg-secondary
+                        {% else %}bg-info
+                        {% endif %}" role="progressbar" style="width: {% widthratio count total_submissions 100 %}%"
+                        title="{{ status }}: {{ count }}">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No submissions yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Language Breakdown -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Language Usage</h5>
+                {% if language_counts %}
+                {% for lang, count in language_counts.items %}
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="fw-semibold text-capitalize">{{ lang }}</span>
+                        <span class="text-muted">{{ count }}</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar
+                            {% if lang == 'python' %}bg-info
+                            {% elif lang == 'cpp' %}bg-primary
+                            {% elif lang == 'java' %}bg-warning
+                            {% else %}bg-secondary
+                            {% endif %}" role="progressbar"
+                            style="width: {% widthratio count total_submissions 100 %}%">
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted">No submissions yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Difficulty Breakdown ===== -->
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Difficulty Breakdown (Solved)</h5>
+                {% if difficulty_counts %}
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="difficulty-ring difficulty-easy">
+                            <span class="ring-value">{{ difficulty_counts.Easy|default:"0" }}</span>
+                        </div>
+                        <div class="mt-2 fw-semibold difficulty-easy-text">Easy</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="difficulty-ring difficulty-medium">
+                            <span class="ring-value">{{ difficulty_counts.Medium|default:"0" }}</span>
+                        </div>
+                        <div class="mt-2 fw-semibold difficulty-medium-text">Medium</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="difficulty-ring difficulty-hard">
+                            <span class="ring-value">{{ difficulty_counts.Hard|default:"0" }}</span>
+                        </div>
+                        <div class="mt-2 fw-semibold difficulty-hard-text">Hard</div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">No problems solved yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Recent Submissions ===== -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="card-title mb-3">Recent Submissions</h5>
+        {% if recent_submissions %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Problem</th>
+                        <th>Language</th>
+                        <th>Verdict</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in recent_submissions %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'problem_detail' sub.problem.pk %}">{{ sub.problem.title }}</a>
+                        </td>
+                        <td class="text-capitalize">{{ sub.language }}</td>
+                        <td>
+                            <span class="
+                                {% if sub.status == 'Accepted' %}status-accepted
+                                {% elif sub.status == 'Wrong Answer' %}status-wrong
+                                {% elif sub.status == 'Time Limit Exceeded' %}status-tle
+                                {% elif sub.status == 'Runtime Error' %}status-rte
+                                {% elif sub.status == 'Compilation Error' %}status-ce
+                                {% else %}status-pending
+                                {% endif %}">
+                                {{ sub.status }}
+                            </span>
+                        </td>
+                        <td class="text-muted">{{ sub.created_at|date:"M d, Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No submissions yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
