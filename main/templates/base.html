@@ -148,6 +148,52 @@
             font-size: .85rem;
             padding: .4em .7em;
         }
+
+        /* --- Home page --- */
+        .hero-section {
+            padding: 3rem 0 1rem;
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .feature-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 1.75rem;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+            transition: transform .2s, box-shadow .2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .1);
+        }
+
+        .feature-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            font-size: 1.5rem;
+        }
+
+        /* --- Custom test area --- */
+        .custom-test-output {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 
@@ -160,10 +206,10 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'problem_list' %}">Problems</a>
                     </li>
+                    {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'submission_history' %}">My Submissions</a>
                     </li>
@@ -172,8 +218,8 @@
                 <ul class="navbar-nav">
                     {% if user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'profile' user.username %}"><i class="bi bi-person-circle"></i>
-                            {{ user.username }}</a>
+                        <a class="nav-link" href="{% url 'profile' user.username %}" title="Profile"><i
+                                class="bi bi-person-circle" style="font-size:1.25rem;"></i></a>
                     </li>
                     <li class="nav-item">
                         <form method="post" action="{% url 'logout' %}" class="d-inline">

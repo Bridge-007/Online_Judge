@@ -173,6 +173,7 @@
                         <th>Language</th>
                         <th>Verdict</th>
                         <th>Date</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -195,6 +196,8 @@
                             </span>
                         </td>
                         <td class="text-muted">{{ sub.created_at|date:"M d, Y H:i" }}</td>
+                        <td><a href="{% url 'submission_detail' sub.pk %}"
+                                class="btn btn-sm btn-outline-primary">View</a></td>
                     </tr>
                     {% endfor %}
                 </tbody>

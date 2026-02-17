@@ -6,14 +6,15 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.db.models import Count, Q
-from django.http import Http404
+from django.http import Http404, JsonResponse
+from django.views.decorators.http import require_POST
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views.generic import ListView, DetailView
 
 from .models import Problem, Submission
 from .forms import RegistrationForm, SubmissionForm
-from .engine import judge_submission
+from .engine import judge_submission, LANGUAGE_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ def register_view(request):
 # ---------------------------------------------------------------------------
 # Problem List (Dashboard)
 # ---------------------------------------------------------------------------
-class ProblemListView(LoginRequiredMixin, ListView):
+class ProblemListView(ListView):
     model = Problem
     template_name = 'judge/problem_list.html'
     context_object_name = 'problems'
@@ -55,12 +56,15 @@ class ProblemListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Collect set of problem IDs the current user has solved (Accepted)
-        solved_ids = set(
-            Submission.objects.filter(
-                user=self.request.user,
-                status='Accepted',
-            ).values_list('problem_id', flat=True)
-        )
+        if self.request.user.is_authenticated:
+            solved_ids = set(
+                Submission.objects.filter(
+                    user=self.request.user,
+                    status='Accepted',
+                ).values_list('problem_id', flat=True)
+            )
+        else:
+            solved_ids = set()
         context['solved_ids'] = solved_ids
         return context
 
@@ -95,6 +99,68 @@ def problem_detail(request, pk):
         'sample_cases': sample_cases,
         'form': form,
     })
+
+
+# ---------------------------------------------------------------------------
+# Run Custom Test Case (AJAX)
+# ---------------------------------------------------------------------------
+@login_required
+@require_POST
+def run_custom_test(request, pk):
+    """Run user code against a single custom input (no Submission created)."""
+    import os, sys, subprocess, tempfile, shutil
+
+    problem = get_object_or_404(Problem, pk=pk)
+    code = request.POST.get('code', '')
+    language = request.POST.get('language', '')
+    custom_input = request.POST.get('custom_input', '')
+
+    config = LANGUAGE_CONFIG.get(language)
+    if config is None:
+        return JsonResponse({'error': f'Unsupported language: {language}'})
+
+    if not code.strip():
+        return JsonResponse({'error': 'No code provided.'})
+
+    sandbox = tempfile.mkdtemp(prefix='oj_custom_')
+    try:
+        # Write code
+        code_path = os.path.join(sandbox, config['filename'])
+        with open(code_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+
+        # Compile if needed
+        if config['compile'] is not None:
+            compile_cmd = config['compile'](sandbox)
+            try:
+                result = subprocess.run(
+                    compile_cmd, capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    return JsonResponse({'error': 'Compilation Error', 'output': result.stderr[:2000]})
+            except FileNotFoundError:
+                return JsonResponse({'error': f'Compiler not found for {language}.'})
+
+        # Run
+        run_cmd = config['run'](sandbox)
+        try:
+            result = subprocess.run(
+                run_cmd,
+                input=custom_input,
+                capture_output=True,
+                text=True,
+                timeout=problem.time_limit,
+            )
+        except subprocess.TimeoutExpired:
+            return JsonResponse({'error': 'Time Limit Exceeded'})
+
+        if result.returncode != 0:
+            error_msg = result.stderr[:2000] if result.stderr else 'Non-zero exit code.'
+            return JsonResponse({'error': 'Runtime Error', 'output': error_msg})
+
+        return JsonResponse({'output': result.stdout})
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------

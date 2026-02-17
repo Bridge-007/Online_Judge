@@ -15,8 +15,8 @@ class Problem(models.Model):
     time_limit = models.FloatField(default=2.0, help_text="Time limit in seconds.")
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ['-created_at']
+    # class Meta:
+    #     ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.title} ({self.difficulty})"
