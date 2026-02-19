@@ -194,6 +194,74 @@
             max-height: 300px;
             overflow-y: auto;
         }
+
+        /* --- Tag badges --- */
+        .tag-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            font-size: .75rem;
+            font-weight: 600;
+            padding: .2em .6em;
+            border-radius: 6px;
+            margin-right: .25rem;
+            margin-bottom: .25rem;
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+
+        .tag-badge:hover {
+            opacity: .85;
+            color: #fff;
+        }
+
+        /* --- Filter bar --- */
+        .filter-bar {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+        }
+
+        /* --- Test case result verdicts --- */
+        .tc-results-table tbody tr {
+            transition: background .12s;
+        }
+
+        .tc-results-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .tc-verdict {
+            font-weight: 600;
+            font-size: .9rem;
+        }
+
+        .tc-passed {
+            color: #198754;
+        }
+
+        .tc-wa {
+            color: #dc3545;
+        }
+
+        .tc-tle {
+            color: #fd7e14;
+        }
+
+        .tc-rte {
+            color: #6f42c1;
+        }
+
+        .tc-mle {
+            color: #d63384;
+        }
+
+        /* --- MLE status --- */
+        .status-mle {
+            color: #d63384;
+            font-weight: bold;
+        }
     </style>
 </head>
 

@@ -5,6 +5,85 @@
 {% block content %}
 <h2 class="mb-4">Problem Dashboard</h2>
 
+<!-- ===== Search & Filter Bar ===== -->
+<div class="filter-bar mb-4">
+    <form method="get" class="row g-2 align-items-end">
+        <!-- Search -->
+        <div class="col-md-3">
+            <label class="form-label small text-muted">Search</label>
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" name="q" class="form-control" placeholder="Search by title..."
+                    value="{{ current_q }}">
+            </div>
+        </div>
+
+        <!-- Difficulty -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">Difficulty</label>
+            <select name="difficulty" class="form-select">
+                <option value="">All</option>
+                <option value="Easy" {% if current_difficulty == 'Easy' %}selected{% endif %}>Easy</option>
+                <option value="Medium" {% if current_difficulty == 'Medium' %}selected{% endif %}>Medium</option>
+                <option value="Hard" {% if current_difficulty == 'Hard' %}selected{% endif %}>Hard</option>
+            </select>
+        </div>
+
+        <!-- Tag -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">Tag</label>
+            <select name="tag" class="form-select">
+                <option value="">All Tags</option>
+                {% for tag in all_tags %}
+                <option value="{{ tag.slug }}" {% if current_tag == tag.slug %}selected{% endif %}>{{ tag.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Status -->
+        {% if user.is_authenticated %}
+        <div class="col-md-2">
+            <label class="form-label small text-muted">Status</label>
+            <select name="status" class="form-select">
+                <option value="">All</option>
+                <option value="solved" {% if current_status == 'solved' %}selected{% endif %}>Solved</option>
+                <option value="unsolved" {% if current_status == 'unsolved' %}selected{% endif %}>Unsolved</option>
+            </select>
+        </div>
+        {% endif %}
+
+        <!-- Buttons -->
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-funnel"></i> Filter
+            </button>
+            <a href="{% url 'problem_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg"></i> Clear
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Active Filters -->
+{% if current_q or current_difficulty or current_tag or current_status %}
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+    <small class="text-muted">Active filters:</small>
+    {% if current_q %}
+    <span class="badge bg-primary">Search: "{{ current_q }}"</span>
+    {% endif %}
+    {% if current_difficulty %}
+    <span class="badge bg-info text-dark">{{ current_difficulty }}</span>
+    {% endif %}
+    {% if current_tag %}
+    <span class="badge bg-purple text-white">Tag: {{ current_tag }}</span>
+    {% endif %}
+    {% if current_status %}
+    <span class="badge bg-success">{{ current_status|title }}</span>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if problems %}
 <div class="table-responsive">
     <table class="table table-hover align-middle">
@@ -12,6 +91,7 @@
             <tr>
                 <th>#</th>
                 <th>Title</th>
+                <th>Tags</th>
                 <th>Difficulty</th>
                 <th>Status</th>
             </tr>
@@ -21,6 +101,13 @@
             <tr>
                 <td>{{ problem.pk }}</td>
                 <td><a href="{% url 'problem_detail' problem.pk %}">{{ problem.title }}</a></td>
+                <td>
+                    {% for tag in problem.tags.all %}
+                    <a href="?tag={{ tag.slug }}" class="tag-badge">{{ tag.name }}</a>
+                    {% empty %}
+                    <span class="text-muted small">—</span>
+                    {% endfor %}
+                </td>
                 <td>
                     <span class="difficulty-{{ problem.difficulty|lower }}">
                         {{ problem.difficulty }}
@@ -39,6 +126,6 @@
     </table>
 </div>
 {% else %}
-<div class="alert alert-info">No problems available yet. Check back soon!</div>
+<div class="alert alert-info">No problems match your filters. Try adjusting your search criteria.</div>
 {% endif %}
 {% endblock %}

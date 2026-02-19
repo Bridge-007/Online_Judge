@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-8">
+    <div class="col-lg-9">
         <div class="card shadow-sm">
             <div class="card-header bg-dark text-white d-flex justify-content-between">
                 <h4 class="mb-0">Submission #{{ submission.pk }}</h4>
@@ -14,6 +14,7 @@
                     {% elif submission.status == 'Time Limit Exceeded' %}bg-warning text-dark
                     {% elif submission.status == 'Runtime Error' %}bg-info
                     {% elif submission.status == 'Compilation Error' %}bg-secondary
+                    {% elif submission.status == 'Memory Limit Exceeded' %}bg-purple
                     {% else %}bg-primary
                     {% endif %}">
                     {{ submission.status }}
@@ -23,7 +24,8 @@
                 <table class="table table-borderless">
                     <tr>
                         <th style="width:150px;">Problem</th>
-                        <td><a href="{% url 'problem_detail' submission.problem.pk %}">{{ submission.problem.title }}</a></td>
+                        <td><a href="{% url 'problem_detail' submission.problem.pk %}">{{ submission.problem.title
+                                }}</a></td>
                     </tr>
                     <tr>
                         <th>Language</th>
@@ -38,6 +40,60 @@
                 {% if submission.output %}
                 <h5 class="mt-3">Judge Output</h5>
                 <pre class="bg-light p-3 rounded">{{ submission.output }}</pre>
+                {% endif %}
+
+                <!-- ===== Per-Test-Case Results ===== -->
+                {% if test_case_results %}
+                <h5 class="mt-4 mb-3"><i class="bi bi-list-check"></i> Test Case Results</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle tc-results-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:60px;">#</th>
+                                <th>Verdict</th>
+                                <th style="width:110px;">Time</th>
+                                <th style="width:110px;">Memory</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tcr in test_case_results %}
+                            <tr>
+                                <td class="fw-semibold">{{ tcr.test_case_number }}</td>
+                                <td>
+                                    {% if tcr.status == 'Passed' %}
+                                    <span class="tc-verdict tc-passed"><i class="bi bi-check-circle-fill"></i>
+                                        Passed</span>
+                                    {% elif tcr.status == 'Wrong Answer' %}
+                                    <span class="tc-verdict tc-wa"><i class="bi bi-x-circle-fill"></i> Wrong
+                                        Answer</span>
+                                    {% elif tcr.status == 'Time Limit Exceeded' %}
+                                    <span class="tc-verdict tc-tle"><i class="bi bi-clock-fill"></i> TLE</span>
+                                    {% elif tcr.status == 'Runtime Error' %}
+                                    <span class="tc-verdict tc-rte"><i class="bi bi-exclamation-triangle-fill"></i>
+                                        RTE</span>
+                                    {% elif tcr.status == 'Memory Limit Exceeded' %}
+                                    <span class="tc-verdict tc-mle"><i class="bi bi-memory"></i> MLE</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if tcr.execution_time != None %}
+                                    <span class="text-muted small">{{ tcr.execution_time }}s</span>
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if tcr.memory_used != None %}
+                                    <span class="text-muted small">{{ tcr.memory_used }} MB</span>
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 {% endif %}
 
                 <h5 class="mt-3">Submitted Code</h5>

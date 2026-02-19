@@ -12,7 +12,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views.generic import ListView, DetailView
 
-from .models import Problem, Submission
+from .models import Problem, Submission, Tag
 from .forms import RegistrationForm, SubmissionForm
 from .engine import judge_submission, LANGUAGE_CONFIG
 
@@ -46,16 +46,51 @@ def register_view(request):
 
 
 # ---------------------------------------------------------------------------
-# Problem List (Dashboard)
+# Problem List (Dashboard) — with Search & Filtering
 # ---------------------------------------------------------------------------
 class ProblemListView(ListView):
     model = Problem
     template_name = 'judge/problem_list.html'
     context_object_name = 'problems'
 
+    def get_queryset(self):
+        qs = Problem.objects.prefetch_related('tags').all()
+
+        # --- Search by title ---
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            qs = qs.filter(title__icontains=q)
+
+        # --- Filter by difficulty ---
+        difficulty = self.request.GET.get('difficulty', '').strip()
+        if difficulty in ('Easy', 'Medium', 'Hard'):
+            qs = qs.filter(difficulty=difficulty)
+
+        # --- Filter by tag ---
+        tag_slug = self.request.GET.get('tag', '').strip()
+        if tag_slug:
+            qs = qs.filter(tags__slug=tag_slug)
+
+        # --- Filter by solved / unsolved ---
+        status_filter = self.request.GET.get('status', '').strip()
+        if status_filter and self.request.user.is_authenticated:
+            solved_ids = set(
+                Submission.objects.filter(
+                    user=self.request.user,
+                    status='Accepted',
+                ).values_list('problem_id', flat=True)
+            )
+            if status_filter == 'solved':
+                qs = qs.filter(pk__in=solved_ids)
+            elif status_filter == 'unsolved':
+                qs = qs.exclude(pk__in=solved_ids)
+
+        return qs.distinct()
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Collect set of problem IDs the current user has solved (Accepted)
+
+        # Solved IDs for status badges
         if self.request.user.is_authenticated:
             solved_ids = set(
                 Submission.objects.filter(
@@ -66,6 +101,16 @@ class ProblemListView(ListView):
         else:
             solved_ids = set()
         context['solved_ids'] = solved_ids
+
+        # All tags for the filter dropdown
+        context['all_tags'] = Tag.objects.all()
+
+        # Preserve current filter values in the template
+        context['current_q'] = self.request.GET.get('q', '')
+        context['current_difficulty'] = self.request.GET.get('difficulty', '')
+        context['current_tag'] = self.request.GET.get('tag', '')
+        context['current_status'] = self.request.GET.get('status', '')
+
         return context
 
 
@@ -75,8 +120,15 @@ class ProblemListView(ListView):
 @login_required
 def problem_detail(request, pk):
     """Show problem details + sample test cases; handle code submission."""
-    problem = get_object_or_404(Problem, pk=pk)
+    problem = get_object_or_404(Problem.objects.prefetch_related('tags'), pk=pk)
     sample_cases = problem.test_cases.filter(is_sample=True)
+
+    # Check if the user has solved this problem (for editorial visibility)
+    has_solved = Submission.objects.filter(
+        user=request.user,
+        problem=problem,
+        status='Accepted',
+    ).exists()
 
     if request.method == 'POST':
         form = SubmissionForm(request.POST)
@@ -98,6 +150,7 @@ def problem_detail(request, pk):
         'problem': problem,
         'sample_cases': sample_cases,
         'form': form,
+        'has_solved': has_solved,
     })
 
 
@@ -164,7 +217,7 @@ def run_custom_test(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# Submission Detail (Result)
+# Submission Detail (Result) — with Per-Test-Case Verdicts
 # ---------------------------------------------------------------------------
 class SubmissionDetailView(LoginRequiredMixin, DetailView):
     model = Submission
@@ -177,6 +230,11 @@ class SubmissionDetailView(LoginRequiredMixin, DetailView):
         if obj.user != self.request.user:
             raise Http404("You do not have permission to view this submission.")
         return obj
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['test_case_results'] = self.object.test_case_results.all()
+        return context
 
 
 # ---------------------------------------------------------------------------
