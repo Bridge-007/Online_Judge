@@ -23,9 +23,9 @@
             <label class="form-label small text-muted">Difficulty</label>
             <select name="difficulty" class="form-select">
                 <option value="">All</option>
-                <option value="Easy" {% if current_difficulty == 'Easy' %}selected{% endif %}>Easy</option>
-                <option value="Medium" {% if current_difficulty == 'Medium' %}selected{% endif %}>Medium</option>
-                <option value="Hard" {% if current_difficulty == 'Hard' %}selected{% endif %}>Hard</option>
+                <option value="Easy" {% if current_difficulty == "Easy" %}selected{% endif %}>Easy</option>
+                <option value="Medium" {% if current_difficulty == "Medium" %}selected{% endif %}>Medium</option>
+                <option value="Hard" {% if current_difficulty == "Hard" %}selected{% endif %}>Hard</option>
             </select>
         </div>
 
@@ -47,8 +47,8 @@
             <label class="form-label small text-muted">Status</label>
             <select name="status" class="form-select">
                 <option value="">All</option>
-                <option value="solved" {% if current_status == 'solved' %}selected{% endif %}>Solved</option>
-                <option value="unsolved" {% if current_status == 'unsolved' %}selected{% endif %}>Unsolved</option>
+                <option value="solved" {% if current_status == "solved" %}selected{% endif %}>Solved</option>
+                <option value="unsolved" {% if current_status == "unsolved" %}selected{% endif %}>Unsolved</option>
             </select>
         </div>
         {% endif %}
@@ -56,7 +56,7 @@
         <!-- Buttons -->
         <div class="col-md-3 d-flex gap-2">
             <button type="submit" class="btn btn-primary">
-                <i class="bi bi-funnel"></i> Filter
+                <i class="bi bi-search"></i> Search
             </button>
             <a href="{% url 'problem_list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-x-lg"></i> Clear

@@ -24,13 +24,14 @@
                 </div>
                 {% endif %}
 
-                <p style="white-space: pre-wrap;">{{ problem.description }}</p>
-                <hr>
-                <div class="d-flex gap-4">
-                    <small class="text-muted"><i class="bi bi-clock"></i> Time Limit: {{ problem.time_limit }}s</small>
-                    <small class="text-muted"><i class="bi bi-memory"></i> Memory Limit: {{ problem.memory_limit }}
+                <!-- Constraints -->
+                <div class="d-flex gap-4 mb-3 p-2 bg-light rounded border">
+                    <small class="fw-semibold"><i class="bi bi-clock"></i> Time Limit: {{ problem.time_limit }}s</small>
+                    <small class="fw-semibold"><i class="bi bi-memory"></i> Memory Limit: {{ problem.memory_limit }}
                         MB</small>
                 </div>
+
+                <p style="white-space: pre-wrap;">{{ problem.description }}</p>
             </div>
         </div>
 
