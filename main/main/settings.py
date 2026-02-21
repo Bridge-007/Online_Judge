@@ -127,3 +127,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/problems/'
 LOGOUT_REDIRECT_URL = '/'
+
+# Email backend (file-based for development — saves emails as files)
+# For production, switch to 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
+EMAIL_FILE_PATH = BASE_DIR / 'sent_emails'
+
+# HuggingFace API (for AI code review)
+HUGGINGFACE_API_KEY = 'REMOVED_SECRET'

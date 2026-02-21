@@ -238,6 +238,73 @@ class SubmissionDetailView(LoginRequiredMixin, DetailView):
 
 
 # ---------------------------------------------------------------------------
+# AI Code Review
+# ---------------------------------------------------------------------------
+@login_required
+@require_POST
+def ai_review(request, pk):
+    """Generate an AI review of the user's submitted code."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    submission = get_object_or_404(Submission, pk=pk)
+    if submission.user != request.user:
+        return JsonResponse({'error': 'Access denied.'}, status=403)
+
+    from django.conf import settings
+    api_key = getattr(settings, 'HUGGINGFACE_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'error': 'AI review is not configured.'}, status=500)
+
+    # Build the prompt
+    problem = submission.problem
+    language_display = submission.get_language_display()
+    prompt = (
+        f"You are an expert code reviewer for a competitive programming platform.\n"
+        f"Review the following {language_display} solution and provide concise, actionable feedback.\n\n"
+        f"## Problem: {problem.title}\n"
+        f"Difficulty: {problem.difficulty}\n\n"
+        f"### Problem Statement:\n{problem.description}\n\n"
+        f"### Submitted Code ({language_display}):\n```\n{submission.code}\n```\n\n"
+        f"### Verdict: {submission.status}\n\n"
+        f"Please provide:\n"
+        f"1. **Code Quality**: Style, readability, naming conventions\n"
+        f"2. **Correctness**: Any logical bugs or edge cases missed\n"
+        f"3. **Efficiency**: Time/space complexity analysis and potential optimizations\n"
+        f"4. **Suggestions**: Concrete improvements with brief explanations\n\n"
+        f"Keep your review concise and helpful. Use markdown formatting."
+    )
+
+    payload = json.dumps({
+        'model': 'Qwen/Qwen2.5-Coder-32B-Instruct',
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': 1024,
+        'temperature': 0.7,
+    }).encode()
+
+    req = urllib.request.Request(
+        'https://router.huggingface.co/v1/chat/completions',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        },
+    )
+
+    try:
+        resp = urllib.request.urlopen(req, timeout=60)
+        result = json.loads(resp.read().decode())
+        review_text = result['choices'][0]['message']['content']
+        return JsonResponse({'review': review_text})
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()[:300]
+        return JsonResponse({'error': f'AI service error ({e.code}): {body}'}, status=502)
+    except Exception as e:
+        return JsonResponse({'error': f'Failed to get AI review: {str(e)}'}, status=500)
+
+
+# ---------------------------------------------------------------------------
 # Submission History
 # ---------------------------------------------------------------------------
 class SubmissionHistoryView(LoginRequiredMixin, ListView):

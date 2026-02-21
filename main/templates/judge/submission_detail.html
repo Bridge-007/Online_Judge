@@ -3,6 +3,7 @@
 {% block title %}Submission #{{ submission.pk }} — Online Judge{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="row justify-content-center">
     <div class="col-lg-9">
         <div class="card shadow-sm">
@@ -99,12 +100,88 @@
                 <pre class="bg-dark text-light p-3 rounded"
                     style="max-height:400px; overflow-y:auto;">{{ submission.code }}</pre>
             </div>
-            <div class="card-footer text-end">
-                <a href="{% url 'problem_detail' submission.problem.pk %}" class="btn btn-outline-primary btn-sm">Try
-                    Again</a>
-                <a href="{% url 'submission_history' %}" class="btn btn-outline-secondary btn-sm">All Submissions</a>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div>
+                    <button type="button" id="ai-review-btn" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-robot"></i> AI Review
+                    </button>
+                </div>
+                <div>
+                    <a href="{% url 'problem_detail' submission.problem.pk %}"
+                        class="btn btn-outline-primary btn-sm">Try
+                        Again</a>
+                    <a href="{% url 'submission_history' %}" class="btn btn-outline-secondary btn-sm">All
+                        Submissions</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Review Result (hidden by default) -->
+        <div id="ai-review-card" class="card shadow-sm mt-3" style="display:none;">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-robot"></i> AI Code Review</h5>
+                <button type="button" class="btn btn-sm btn-outline-light" id="ai-review-close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="ai-review-content" style="white-space: pre-wrap;"></div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById('ai-review-btn').addEventListener('click', function () {
+        const btn = this;
+        const card = document.getElementById('ai-review-card');
+        const content = document.getElementById('ai-review-content');
+
+        // Show loading state
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analyzing...';
+        card.style.display = 'block';
+        content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info" role="status"></div><p class="text-muted mt-2">AI is reviewing your code...</p></div>';
+
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+            document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+
+        fetch('{% url "ai_review" submission.pk %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json',
+            },
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    content.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle"></i> ' + data.error + '</div>';
+                } else {
+                    // Render the review text (basic markdown-like formatting)
+                    let html = data.review
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/`([^`]+)`/g, '<code>$1</code>')
+                        .replace(/```([\s\S]*?)```/g, '<pre class="bg-light p-2 rounded">$1</pre>')
+                        .replace(/^### (.*$)/gm, '<h6 class="mt-3 mb-1">$1</h6>')
+                        .replace(/^## (.*$)/gm, '<h5 class="mt-3 mb-2">$1</h5>')
+                        .replace(/^# (.*$)/gm, '<h4 class="mt-3 mb-2">$1</h4>')
+                        .replace(/^\d+\.\s/gm, function (match) { return '<br>' + match; });
+                    content.innerHTML = html;
+                }
+            })
+            .catch(() => {
+                content.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle"></i> Failed to connect to AI service.</div>';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-robot"></i> AI Review';
+            });
+    });
+
+    document.getElementById('ai-review-close').addEventListener('click', function () {
+        document.getElementById('ai-review-card').style.display = 'none';
+    });
+</script>
 {% endblock %}
