@@ -6,34 +6,37 @@
 <h2 class="mb-4">Submission History</h2>
 
 {% if submissions %}
-<div class="table-responsive">
-    <table class="table table-hover align-middle">
-        <thead class="table-dark">
-            <tr>
-                <th>Problem</th>
-                <th>Language</th>
-                <th>Status</th>
-                <th>Submitted At</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for sub in submissions %}
-            <tr>
-                <td><a href="{% url 'problem_detail' sub.problem.pk %}">{{ sub.problem.title }}</a></td>
-                <td>{{ sub.get_language_display }}</td>
-                <td>
-                    <span
-                        class="{% if sub.status == 'Accepted' %}status-accepted{% elif sub.status == 'Wrong Answer' %}status-wrong{% elif sub.status == 'Time Limit Exceeded' %}status-tle{% elif sub.status == 'Runtime Error' %}status-rte{% elif sub.status == 'Compilation Error' %}status-ce{% else %}status-pending{% endif %}">
-                        {{ sub.status }}
-                    </span>
-                </td>
-                <td>{{ sub.created_at|date:"M d, Y H:i" }}</td>
-                <td><a href="{% url 'submission_detail' sub.pk %}" class="btn btn-sm btn-outline-primary">View</a></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Problem</th>
+                    <th>Language</th>
+                    <th>Status</th>
+                    <th>Submitted At</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sub in submissions %}
+                <tr>
+                    <td><a href="{% url 'problem_detail' sub.problem.pk %}">{{ sub.problem.title }}</a></td>
+                    <td>{{ sub.get_language_display }}</td>
+                    <td>
+                        <span
+                            class="{% if sub.status == 'Accepted' %}status-accepted{% elif sub.status == 'Wrong Answer' %}status-wrong{% elif sub.status == 'Time Limit Exceeded' %}status-tle{% elif sub.status == 'Runtime Error' %}status-rte{% elif sub.status == 'Compilation Error' %}status-ce{% else %}status-pending{% endif %}">
+                            {{ sub.status }}
+                        </span>
+                    </td>
+                    <td class="text-muted">{{ sub.created_at|date:"M d, Y H:i" }}</td>
+                    <td><a href="{% url 'submission_detail' sub.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% else %}
 <div class="alert alert-info">You haven't submitted any solutions yet. <a href="{% url 'problem_list' %}">Browse

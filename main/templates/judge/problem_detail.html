@@ -6,11 +6,11 @@
 <div class="row">
     <!-- Problem Description -->
     <div class="col-lg-6 mb-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h4 class="mb-0">{{ problem.title }}</h4>
                 <span
-                    class="badge bg-{% if problem.difficulty == 'Easy' %}success{% elif problem.difficulty == 'Medium' %}warning{% else %}danger{% endif %} align-self-center">
+                    class="badge bg-{% if problem.difficulty == 'Easy' %}success{% elif problem.difficulty == 'Medium' %}warning{% else %}danger{% endif %}">
                     {{ problem.difficulty }}
                 </span>
             </div>
@@ -25,10 +25,9 @@
                 {% endif %}
 
                 <!-- Constraints -->
-                <div class="d-flex gap-4 mb-3 p-2 bg-light rounded border">
-                    <small class="fw-semibold"><i class="bi bi-clock"></i> Time Limit: {{ problem.time_limit }}s</small>
-                    <small class="fw-semibold"><i class="bi bi-memory"></i> Memory Limit: {{ problem.memory_limit }}
-                        MB</small>
+                <div class="constraint-box mb-3">
+                    <small><i class="bi bi-clock"></i> Time Limit: {{ problem.time_limit }}s</small>
+                    <small><i class="bi bi-memory"></i> Memory Limit: {{ problem.memory_limit }} MB</small>
                 </div>
 
                 <p style="white-space: pre-wrap;">{{ problem.description }}</p>
@@ -36,7 +35,7 @@
         </div>
 
         {% if sample_cases %}
-        <div class="card shadow-sm mt-3">
+        <div class="card mt-3">
             <div class="card-header"><strong>Sample Test Cases</strong></div>
             <div class="card-body">
                 {% for tc in sample_cases %}
@@ -44,12 +43,12 @@
                     <strong>Sample {{ forloop.counter }}:</strong>
                     <div class="row mt-1">
                         <div class="col-md-6">
-                            <label class="form-label text-muted">Input</label>
-                            <pre class="bg-light p-2 rounded">{{ tc.input_data }}</pre>
+                            <label class="form-label text-muted small">Input</label>
+                            <pre>{{ tc.input_data }}</pre>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label text-muted">Expected Output</label>
-                            <pre class="bg-light p-2 rounded">{{ tc.expected_output }}</pre>
+                            <label class="form-label text-muted small">Expected Output</label>
+                            <pre>{{ tc.expected_output }}</pre>
                         </div>
                     </div>
                 </div>
@@ -60,7 +59,7 @@
 
         <!-- Editorial Section -->
         {% if problem.editorial %}
-        <div class="card shadow-sm mt-3">
+        <div class="card mt-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong><i class="bi bi-lightbulb"></i> Editorial</strong>
                 {% if has_solved %}
@@ -85,9 +84,9 @@
 
     <!-- Code Submission Form -->
     <div class="col-lg-6">
-        <div class="card shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Submit Your Solution</h5>
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-send"></i> Submit Your Solution</h5>
             </div>
             <div class="card-body">
                 <form method="post" id="submit-form">
@@ -111,8 +110,8 @@
         </div>
 
         <!-- Custom Test Case -->
-        <div class="card shadow-sm mt-3">
-            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-terminal"></i> Run Custom Test</h5>
             </div>
             <div class="card-body">

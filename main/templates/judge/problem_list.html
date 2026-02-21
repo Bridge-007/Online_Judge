@@ -10,7 +10,7 @@
     <form method="get" class="row g-2 align-items-end">
         <!-- Search -->
         <div class="col-md-3">
-            <label class="form-label small text-muted">Search</label>
+            <label class="form-label small">Search</label>
             <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                 <input type="text" name="q" class="form-control" placeholder="Search by title..."
@@ -20,7 +20,7 @@
 
         <!-- Difficulty -->
         <div class="col-md-2">
-            <label class="form-label small text-muted">Difficulty</label>
+            <label class="form-label small">Difficulty</label>
             <select name="difficulty" class="form-select">
                 <option value="">All</option>
                 <option value="Easy" {% if current_difficulty == "Easy" %}selected{% endif %}>Easy</option>
@@ -31,7 +31,7 @@
 
         <!-- Tag -->
         <div class="col-md-2">
-            <label class="form-label small text-muted">Tag</label>
+            <label class="form-label small">Tag</label>
             <select name="tag" class="form-select">
                 <option value="">All Tags</option>
                 {% for tag in all_tags %}
@@ -44,7 +44,7 @@
         <!-- Status -->
         {% if user.is_authenticated %}
         <div class="col-md-2">
-            <label class="form-label small text-muted">Status</label>
+            <label class="form-label small">Status</label>
             <select name="status" class="form-select">
                 <option value="">All</option>
                 <option value="solved" {% if current_status == "solved" %}selected{% endif %}>Solved</option>
@@ -73,7 +73,7 @@
     <span class="badge bg-primary">Search: "{{ current_q }}"</span>
     {% endif %}
     {% if current_difficulty %}
-    <span class="badge bg-info text-dark">{{ current_difficulty }}</span>
+    <span class="badge bg-info">{{ current_difficulty }}</span>
     {% endif %}
     {% if current_tag %}
     <span class="badge bg-purple text-white">Tag: {{ current_tag }}</span>
@@ -85,45 +85,47 @@
 {% endif %}
 
 {% if problems %}
-<div class="table-responsive">
-    <table class="table table-hover align-middle">
-        <thead class="table-dark">
-            <tr>
-                <th>#</th>
-                <th>Title</th>
-                <th>Tags</th>
-                <th>Difficulty</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for problem in problems %}
-            <tr>
-                <td>{{ problem.pk }}</td>
-                <td><a href="{% url 'problem_detail' problem.pk %}">{{ problem.title }}</a></td>
-                <td>
-                    {% for tag in problem.tags.all %}
-                    <a href="?tag={{ tag.slug }}" class="tag-badge">{{ tag.name }}</a>
-                    {% empty %}
-                    <span class="text-muted small">—</span>
-                    {% endfor %}
-                </td>
-                <td>
-                    <span class="difficulty-{{ problem.difficulty|lower }}">
-                        {{ problem.difficulty }}
-                    </span>
-                </td>
-                <td>
-                    {% if problem.pk in solved_ids %}
-                    <span class="badge bg-success">Solved ✓</span>
-                    {% else %}
-                    <span class="badge bg-secondary">Unsolved</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>Tags</th>
+                    <th>Difficulty</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for problem in problems %}
+                <tr>
+                    <td>{{ problem.pk }}</td>
+                    <td><a href="{% url 'problem_detail' problem.pk %}">{{ problem.title }}</a></td>
+                    <td>
+                        {% for tag in problem.tags.all %}
+                        <a href="?tag={{ tag.slug }}" class="tag-badge">{{ tag.name }}</a>
+                        {% empty %}
+                        <span class="text-muted small">—</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        <span class="difficulty-{{ problem.difficulty|lower }}">
+                            {{ problem.difficulty }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if problem.pk in solved_ids %}
+                        <span class="badge bg-success">Solved ✓</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Unsolved</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% else %}
 <div class="alert alert-info">No problems match your filters. Try adjusting your search criteria.</div>
