@@ -14,7 +14,7 @@ from django.views.generic import ListView, DetailView
 
 from .models import Problem, Submission, Tag
 from .forms import RegistrationForm, SubmissionForm
-from .engine import judge_submission, LANGUAGE_CONFIG
+from .engine import judge_submission, run_code, LANGUAGE_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -161,59 +161,28 @@ def problem_detail(request, pk):
 @require_POST
 def run_custom_test(request, pk):
     """Run user code against a single custom input (no Submission created)."""
-    import os, sys, subprocess, tempfile, shutil
-
     problem = get_object_or_404(Problem, pk=pk)
     code = request.POST.get('code', '')
     language = request.POST.get('language', '')
     custom_input = request.POST.get('custom_input', '')
 
-    config = LANGUAGE_CONFIG.get(language)
-    if config is None:
+    if language not in LANGUAGE_CONFIG:
         return JsonResponse({'error': f'Unsupported language: {language}'})
 
     if not code.strip():
         return JsonResponse({'error': 'No code provided.'})
 
-    sandbox = tempfile.mkdtemp(prefix='oj_custom_')
-    try:
-        # Write code
-        code_path = os.path.join(sandbox, config['filename'])
-        with open(code_path, 'w', encoding='utf-8') as f:
-            f.write(code)
+    result = run_code(
+        code=code,
+        language=language,
+        input_data=custom_input,
+        time_limit=problem.time_limit,
+    )
 
-        # Compile if needed
-        if config['compile'] is not None:
-            compile_cmd = config['compile'](sandbox)
-            try:
-                result = subprocess.run(
-                    compile_cmd, capture_output=True, text=True, timeout=30,
-                )
-                if result.returncode != 0:
-                    return JsonResponse({'error': 'Compilation Error', 'output': result.stderr[:2000]})
-            except FileNotFoundError:
-                return JsonResponse({'error': f'Compiler not found for {language}.'})
+    if result['status'] != 'ok':
+        return JsonResponse({'error': result['status'], 'output': result['output']})
 
-        # Run
-        run_cmd = config['run'](sandbox)
-        try:
-            result = subprocess.run(
-                run_cmd,
-                input=custom_input,
-                capture_output=True,
-                text=True,
-                timeout=problem.time_limit,
-            )
-        except subprocess.TimeoutExpired:
-            return JsonResponse({'error': 'Time Limit Exceeded'})
-
-        if result.returncode != 0:
-            error_msg = result.stderr[:2000] if result.stderr else 'Non-zero exit code.'
-            return JsonResponse({'error': 'Runtime Error', 'output': error_msg})
-
-        return JsonResponse({'output': result.stdout})
-    finally:
-        shutil.rmtree(sandbox, ignore_errors=True)
+    return JsonResponse({'output': result['output']})
 
 
 # ---------------------------------------------------------------------------
@@ -260,21 +229,48 @@ def ai_review(request, pk):
     # Build the prompt
     problem = submission.problem
     language_display = submission.get_language_display()
-    prompt = (
-        f"You are an expert code reviewer for a competitive programming platform.\n"
-        f"Review the following {language_display} solution and provide concise, actionable feedback.\n\n"
-        f"## Problem: {problem.title}\n"
-        f"Difficulty: {problem.difficulty}\n\n"
-        f"### Problem Statement:\n{problem.description}\n\n"
-        f"### Submitted Code ({language_display}):\n```\n{submission.code}\n```\n\n"
-        f"### Verdict: {submission.status}\n\n"
-        f"Please provide:\n"
-        f"1. **Code Quality**: Style, readability, naming conventions\n"
-        f"2. **Correctness**: Any logical bugs or edge cases missed\n"
-        f"3. **Efficiency**: Time/space complexity analysis and potential optimizations\n"
-        f"4. **Suggestions**: Concrete improvements with brief explanations\n\n"
-        f"Keep your review concise and helpful. Use markdown formatting."
-    )
+    is_accepted = submission.status == 'Accepted'
+
+    if is_accepted:
+        # Code is correct — focus on optimizations and style
+        prompt = (
+            f"You are an expert code reviewer for a competitive programming platform.\n"
+            f"The following {language_display} solution is CORRECT (Accepted).\n"
+            f"Provide feedback on optimizations and code quality ONLY.\n\n"
+            f"## Problem: {problem.title}\n"
+            f"Difficulty: {problem.difficulty}\n\n"
+            f"### Submitted Code ({language_display}):\n```\n{submission.code}\n```\n\n"
+            f"Please provide:\n"
+            f"1. **Code Quality**: Style, readability, naming conventions\n"
+            f"2. **Efficiency**: Time/space complexity analysis and potential optimizations\n"
+            f"3. **Suggestions**: Better approaches or algorithmic improvements\n\n"
+            f"CRITICAL RULE: Do NOT provide any complete or partial source code solutions. "
+            f"Do NOT write code blocks that could be copied as a solution. "
+            f"Only describe techniques, algorithms, and approaches in plain text. "
+            f"You may reference specific line numbers or variable names from the submitted code.\n\n"
+            f"Keep your review concise and helpful. Use markdown formatting."
+        )
+    else:
+        # Code is incorrect — guide without giving answers
+        prompt = (
+            f"You are an expert code reviewer for a competitive programming platform.\n"
+            f"The following {language_display} solution is INCORRECT (verdict: {submission.status}).\n"
+            f"Help the user understand what went wrong WITHOUT giving them the solution.\n\n"
+            f"## Problem: {problem.title}\n"
+            f"Difficulty: {problem.difficulty}\n\n"
+            f"### Problem Statement:\n{problem.description}\n\n"
+            f"### Submitted Code ({language_display}):\n```\n{submission.code}\n```\n\n"
+            f"### Verdict: {submission.status}\n\n"
+            f"Please provide:\n"
+            f"1. **What went wrong**: Identify the bug or logical error without fixing it for them\n"
+            f"2. **Hints**: Suggest the approach, algorithm, or technique they should consider\n"
+            f"3. **Edge cases**: Point out inputs they might not have considered\n\n"
+            f"CRITICAL RULE: Do NOT provide any complete or partial source code solutions. "
+            f"Do NOT write corrected code or code blocks that could be copied as a solution. "
+            f"Only describe techniques, algorithms, and approaches in plain text. "
+            f"Guide the user toward the answer — do NOT give it to them.\n\n"
+            f"Keep your review concise and helpful. Use markdown formatting."
+        )
 
     payload = json.dumps({
         'model': 'Qwen/Qwen2.5-Coder-32B-Instruct',

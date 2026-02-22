@@ -1,0 +1,19 @@
+# WarCode Sandbox — Lightweight container for running user-submitted code
+# Contains Python 3, g++, and OpenJDK for C++/Java support
+
+FROM python:3.12-slim
+
+# Install compilers
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ \
+    default-jdk-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user for running submissions
+RUN useradd -m -s /bin/bash sandbox
+
+# Working directory
+WORKDIR /sandbox
+
+# Default: just keep container info available
+CMD ["echo", "warcode-sandbox ready"]

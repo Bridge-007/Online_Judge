@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Submission #{{ submission.pk }} — Online Judge{% endblock %}
+{% block title %}Submission #{{ submission.pk }} — WarCode{% endblock %}
 
 {% block content %}
 {% csrf_token %}
@@ -25,7 +25,7 @@
                 <table class="table table-borderless">
                     <tr>
                         <th style="width:150px;">Problem</th>
-                        <td><a href="{% url 'problem_detail' submission.problem.pk %}">{{ submission.problem.title }}</a></td>
+                        <td><a href="{% url 'problem_detail' submission.problem.pk %}">{{ submission.problem.title  }}</a></td>
                     </tr>
                     <tr>
                         <th>Language</th>
@@ -157,14 +157,21 @@
                 if (data.error) {
                     content.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle"></i> ' + data.error + '</div>';
                 } else {
-                    // Render the review text (basic markdown-like formatting)
+                    // Render the review text with distinct code vs explanation styling
                     let html = data.review
+                        // Code blocks first (triple backticks) — monospace, sky-blue
+                        .replace(/```([\w]*)\n?([\s\S]*?)```/g, function (match, lang, code) {
+                            return '<div class="ai-code-block"><pre><code>' + code.trim() + '</code></pre></div>';
+                        })
+                        // Inline code (single backticks) — purple-tinted monospace
+                        .replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>')
+                        // Headings
+                        .replace(/^### (.*$)/gm, '<h6 class="ai-heading mt-3 mb-1">$1</h6>')
+                        .replace(/^## (.*$)/gm, '<h5 class="ai-heading mt-3 mb-2">$1</h5>')
+                        .replace(/^# (.*$)/gm, '<h4 class="ai-heading mt-3 mb-2">$1</h4>')
+                        // Bold text
                         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/`([^`]+)`/g, '<code>$1</code>')
-                        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-                        .replace(/^### (.*$)/gm, '<h6 class="mt-3 mb-1">$1</h6>')
-                        .replace(/^## (.*$)/gm, '<h5 class="mt-3 mb-2">$1</h5>')
-                        .replace(/^# (.*$)/gm, '<h4 class="mt-3 mb-2">$1</h4>')
+                        // Numbered lists
                         .replace(/^\d+\.\s/gm, function (match) { return '<br>' + match; });
                     content.innerHTML = html;
                 }

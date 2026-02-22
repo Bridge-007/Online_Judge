@@ -1,28 +1,131 @@
 """
-Code Execution & Evaluation Engine.
+Code Execution & Evaluation Engine — Docker Sandboxed.
 
-Runs user-submitted code in a temporary sandbox directory, compares output
-against test cases, and returns a verdict. Creates per-test-case result records.
+Runs user-submitted code inside isolated Docker containers with strict
+resource limits (CPU, memory, no network). Compares output against test
+cases and returns a verdict. Creates per-test-case result records.
 """
 
 import os
-import sys
 import shutil
 import subprocess
 import tempfile
-import threading
 import time
-
-try:
-    import psutil
-    HAS_PSUTIL = True
-except ImportError:
-    HAS_PSUTIL = False
 
 from .models import TestCaseResult
 
-# Map language identifiers to file names, compile commands, and run commands.
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+SANDBOX_IMAGE = 'warcode-sandbox'
+
+# Resource limits for the sandbox container
+CONTAINER_MEMORY = '256m'
+CONTAINER_CPUS = '0.5'
+
 LANGUAGE_CONFIG = {
+    'python': {
+        'filename': 'main.py',
+        'compile': None,
+        'run': 'python3 /sandbox/main.py',
+    },
+    'cpp': {
+        'filename': 'main.cpp',
+        'compile': 'g++ /sandbox/main.cpp -o /sandbox/main.exe',
+        'run': '/sandbox/main.exe',
+    },
+    'java': {
+        'filename': 'Main.java',
+        'compile': 'javac /sandbox/Main.java',
+        'run': 'java -cp /sandbox Main',
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Docker helpers
+# ---------------------------------------------------------------------------
+
+def _docker_available():
+    """Check if Docker is available and the sandbox image exists."""
+    try:
+        result = subprocess.run(
+            ['docker', 'image', 'inspect', SANDBOX_IMAGE],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _run_in_docker(command, sandbox_dir, timeout, stdin_data=None):
+    """
+    Execute a command inside a Docker container with strict limits.
+
+    Returns (stdout, stderr, returncode, timed_out, exec_time).
+    """
+    docker_cmd = [
+        'docker', 'run',
+        '--rm',
+        '--network', 'none',           # No internet access
+        '--memory', CONTAINER_MEMORY,   # Memory limit
+        '--cpus', CONTAINER_CPUS,       # CPU limit
+        '--read-only',                  # Read-only root filesystem
+        '--tmpfs', '/tmp:size=64m',     # Small writable /tmp
+        '--user', 'sandbox',           # Non-root user
+        '-v', f'{sandbox_dir}:/sandbox:rw',
+        '-w', '/sandbox',
+        SANDBOX_IMAGE,
+        'bash', '-c', command,
+    ]
+
+    start_time = time.time()
+    timed_out = False
+    try:
+        proc = subprocess.run(
+            docker_cmd,
+            input=stdin_data,
+            capture_output=True,
+            text=True,
+            timeout=timeout + 5,  # Extra 5s for Docker overhead
+        )
+        exec_time = round(time.time() - start_time, 4)
+        return proc.stdout, proc.stderr, proc.returncode, False, exec_time
+    except subprocess.TimeoutExpired:
+        exec_time = round(time.time() - start_time, 4)
+        return '', 'Time Limit Exceeded', -1, True, exec_time
+
+
+def _run_locally(command_parts, sandbox_dir, timeout, stdin_data=None,
+                 is_compile=False):
+    """
+    Fallback: run code locally using subprocess (when Docker is unavailable).
+    Used for local development when Docker is not running.
+    """
+    start_time = time.time()
+    try:
+        proc = subprocess.run(
+            command_parts,
+            input=stdin_data,
+            capture_output=True,
+            text=True,
+            timeout=timeout if not is_compile else 30,
+            cwd=sandbox_dir,
+        )
+        exec_time = round(time.time() - start_time, 4)
+        return proc.stdout, proc.stderr, proc.returncode, False, exec_time
+    except subprocess.TimeoutExpired:
+        exec_time = round(time.time() - start_time, 4)
+        return '', 'Time Limit Exceeded', -1, True, exec_time
+    except FileNotFoundError:
+        return '', f'Compiler/runtime not found.', -1, False, 0
+
+
+# Legacy local-run config (used when Docker is unavailable)
+import sys
+
+LOCAL_LANGUAGE_CONFIG = {
     'python': {
         'filename': 'main.py',
         'compile': None,
@@ -41,22 +144,78 @@ LANGUAGE_CONFIG = {
 }
 
 
-def _monitor_memory(pid, peak_holder, stop_event):
-    """Poll peak RSS of *pid* every 50 ms until *stop_event* is set."""
-    if not HAS_PSUTIL:
-        return
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def run_code(code, language, input_data, time_limit, memory_limit_mb=None):
+    """
+    Run user code against a single input. Returns a dict with:
+        status, output, exec_time
+    Used by both judge_submission (per test case) and run_custom_test.
+    """
+    config = LANGUAGE_CONFIG.get(language)
+    if config is None:
+        return {'status': 'Runtime Error', 'output': f'Unsupported language: {language}', 'exec_time': None}
+
+    sandbox = tempfile.mkdtemp(prefix='oj_sandbox_')
+
     try:
-        proc = psutil.Process(pid)
-        while not stop_event.is_set():
-            try:
-                mem = proc.memory_info().rss / (1024 * 1024)  # bytes → MB
-                if mem > peak_holder[0]:
-                    peak_holder[0] = mem
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                break
-            time.sleep(0.05)
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        pass
+        # Write code to file
+        code_path = os.path.join(sandbox, config['filename'])
+        with open(code_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+
+        use_docker = _docker_available()
+
+        # --- Compile (if needed) ---
+        if config['compile'] is not None:
+            if use_docker:
+                stdout, stderr, rc, timed_out, _ = _run_in_docker(
+                    config['compile'], sandbox, timeout=30,
+                )
+            else:
+                local_cfg = LOCAL_LANGUAGE_CONFIG[language]
+                compile_cmd = local_cfg['compile'](sandbox)
+                stdout, stderr, rc, timed_out, _ = _run_locally(
+                    compile_cmd, sandbox, timeout=30, is_compile=True,
+                )
+
+            if rc != 0:
+                return {
+                    'status': 'Compilation Error',
+                    'output': stderr[:2000] if stderr else 'Compilation failed.',
+                    'exec_time': None,
+                }
+
+        # --- Run ---
+        if use_docker:
+            stdout, stderr, rc, timed_out, exec_time = _run_in_docker(
+                config['run'], sandbox, timeout=time_limit, stdin_data=input_data,
+            )
+        else:
+            local_cfg = LOCAL_LANGUAGE_CONFIG[language]
+            run_cmd = local_cfg['run'](sandbox)
+            stdout, stderr, rc, timed_out, exec_time = _run_locally(
+                run_cmd, sandbox, timeout=time_limit, stdin_data=input_data,
+            )
+
+        if timed_out:
+            return {'status': 'Time Limit Exceeded', 'output': 'Time Limit Exceeded.', 'exec_time': exec_time}
+
+        if rc != 0:
+            error_msg = stderr[:2000] if stderr else 'Non-zero exit code.'
+            # Docker returns exit code 137 for OOM kills
+            if rc == 137:
+                return {'status': 'Memory Limit Exceeded', 'output': 'Memory Limit Exceeded (killed by container).', 'exec_time': exec_time}
+            return {'status': 'Runtime Error', 'output': error_msg, 'exec_time': exec_time}
+
+        return {'status': 'ok', 'output': stdout.strip(), 'exec_time': exec_time}
+
+    except Exception as exc:
+        return {'status': 'Runtime Error', 'output': str(exc)[:2000], 'exec_time': None}
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
 
 
 def judge_submission(submission):
@@ -76,9 +235,8 @@ def judge_submission(submission):
     """
     problem = submission.problem
     language = submission.language
-    config = LANGUAGE_CONFIG.get(language)
 
-    if config is None:
+    if language not in LANGUAGE_CONFIG:
         submission.status = 'Runtime Error'
         submission.output = f'Unsupported language: {language}'
         submission.save()
@@ -91,138 +249,54 @@ def judge_submission(submission):
         submission.save()
         return
 
-    # --- 1. Create sandbox ---
-    sandbox = tempfile.mkdtemp(prefix='oj_sandbox_')
+    overall_status = 'Accepted'
+    first_fail_msg = ''
+    passed_count = 0
 
-    try:
-        # --- 2. Write code to file ---
-        code_path = os.path.join(sandbox, config['filename'])
-        with open(code_path, 'w', encoding='utf-8') as f:
-            f.write(submission.code)
+    for i, tc in enumerate(test_cases, start=1):
+        result = run_code(
+            code=submission.code,
+            language=language,
+            input_data=tc.input_data,
+            time_limit=problem.time_limit,
+            memory_limit_mb=problem.memory_limit,
+        )
 
-        # --- 3. Compile (if needed) ---
-        if config['compile'] is not None:
-            compile_cmd = config['compile'](sandbox)
-            try:
-                result = subprocess.run(
-                    compile_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                if result.returncode != 0:
-                    submission.status = 'Compilation Error'
-                    submission.output = result.stderr[:2000]
-                    submission.save()
-                    return
-            except FileNotFoundError:
-                submission.status = 'Compilation Error'
-                submission.output = f'Compiler not found for {language}. Make sure the compiler is installed and on PATH.'
-                submission.save()
-                return
+        tc_status = 'Passed'
+        actual_output = result['output']
+        exec_time = result['exec_time']
 
-        # --- 4. Run against each test case ---
-        run_cmd = config['run'](sandbox)
-        memory_limit_mb = problem.memory_limit
-        overall_status = 'Accepted'
-        first_fail_msg = ''
-        passed_count = 0
-
-        for i, tc in enumerate(test_cases, start=1):
-            tc_status = 'Passed'
-            actual_output = ''
-            exec_time = None
-            peak_mem = 0.0
-
-            try:
-                start_time = time.time()
-
-                # Use Popen so we can monitor memory
-                proc = subprocess.Popen(
-                    run_cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-
-                # Start memory monitor thread
-                peak_holder = [0.0]
-                stop_event = threading.Event()
-                mem_thread = threading.Thread(
-                    target=_monitor_memory,
-                    args=(proc.pid, peak_holder, stop_event),
-                    daemon=True,
-                )
-                mem_thread.start()
-
-                try:
-                    stdout, stderr = proc.communicate(
-                        input=tc.input_data,
-                        timeout=problem.time_limit,
-                    )
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.communicate()
-                    stop_event.set()
-                    mem_thread.join(timeout=1)
-                    tc_status = 'Time Limit Exceeded'
-                    actual_output = f'Time Limit Exceeded on test case {i}.'
-                else:
-                    stop_event.set()
-                    mem_thread.join(timeout=1)
-
-                    exec_time = round(time.time() - start_time, 4)
-                    peak_mem = round(peak_holder[0], 2)
-
-                    # Check memory limit
-                    if HAS_PSUTIL and memory_limit_mb and peak_mem > memory_limit_mb:
-                        tc_status = 'Memory Limit Exceeded'
-                        actual_output = f'Memory Limit Exceeded on test case {i} ({peak_mem:.1f} MB > {memory_limit_mb} MB).'
-                    elif proc.returncode != 0:
-                        tc_status = 'Runtime Error'
-                        error_msg = stderr[:2000] if stderr else 'Non-zero exit code.'
-                        actual_output = error_msg
-                    else:
-                        actual = stdout.strip()
-                        expected = tc.expected_output.strip()
-                        actual_output = actual
-
-                        if actual != expected:
-                            tc_status = 'Wrong Answer'
-
-            except Exception as exc:
-                tc_status = 'Runtime Error'
-                actual_output = str(exc)[:2000]
-
-            # Save per-test-case result
-            TestCaseResult.objects.create(
-                submission=submission,
-                test_case=tc,
-                test_case_number=i,
-                status=tc_status,
-                actual_output=actual_output[:2000],
-                execution_time=exec_time,
-                memory_used=peak_mem if peak_mem > 0 else None,
-            )
-
-            if tc_status == 'Passed':
-                passed_count += 1
-            elif overall_status == 'Accepted':
-                # First failure determines overall status
-                overall_status = tc_status
-                first_fail_msg = f'{tc_status} on test case {i}.'
-
-        # --- 5. Set overall verdict ---
-        total = len(test_cases)
-        if overall_status == 'Accepted':
-            submission.status = 'Accepted'
-            submission.output = f'All {total} test case(s) passed.'
+        if result['status'] != 'ok':
+            tc_status = result['status']
         else:
-            submission.status = overall_status
-            submission.output = f'Passed {passed_count}/{total} test case(s). {first_fail_msg}'
-        submission.save()
+            # Compare output
+            expected = tc.expected_output.strip()
+            if actual_output != expected:
+                tc_status = 'Wrong Answer'
 
-    finally:
-        # --- 6. Cleanup ---
-        shutil.rmtree(sandbox, ignore_errors=True)
+        # Save per-test-case result
+        TestCaseResult.objects.create(
+            submission=submission,
+            test_case=tc,
+            test_case_number=i,
+            status=tc_status,
+            actual_output=actual_output[:2000],
+            execution_time=exec_time,
+            memory_used=None,
+        )
+
+        if tc_status == 'Passed':
+            passed_count += 1
+        elif overall_status == 'Accepted':
+            overall_status = tc_status
+            first_fail_msg = f'{tc_status} on test case {i}.'
+
+    # Set overall verdict
+    total = len(test_cases)
+    if overall_status == 'Accepted':
+        submission.status = 'Accepted'
+        submission.output = f'All {total} test case(s) passed.'
+    else:
+        submission.status = overall_status
+        submission.output = f'Passed {passed_count}/{total} test case(s). {first_fail_msg}'
+    submission.save()
