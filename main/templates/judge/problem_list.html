@@ -65,7 +65,6 @@
     </form>
 </div>
 
-<!-- Active Filters -->
 {% if current_q or current_difficulty or current_tag or current_status %}
 <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
     <small class="text-muted">Active filters:</small>
@@ -100,13 +99,13 @@
             <tbody>
                 {% for problem in problems %}
                 <tr>
-                    <td>{{ problem.pk }}</td>
+                    <td>{{ forloop.counter }}</td>
                     <td><a href="{% url 'problem_detail' problem.pk %}">{{ problem.title }}</a></td>
                     <td>
                         {% for tag in problem.tags.all %}
                         <a href="?tag={{ tag.slug }}" class="tag-badge">{{ tag.name }}</a>
                         {% empty %}
-                        <span class="text-muted small">—</span>
+                        <span class="text-muted small">-</span>
                         {% endfor %}
                     </td>
                     <td>
@@ -116,7 +115,7 @@
                     </td>
                     <td>
                         {% if problem.pk in solved_ids %}
-                        <span class="badge bg-success">Solved ✓</span>
+                        <span class="badge bg-success">Solved</span>
                         {% else %}
                         <span class="badge bg-secondary">Unsolved</span>
                         {% endif %}

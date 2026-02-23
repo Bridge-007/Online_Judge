@@ -1,107 +1,84 @@
 """
-Code Execution & Evaluation Engine — Docker Sandboxed.
+Code Execution & Evaluation Engine — Subprocess Based.
 
-Runs user-submitted code inside isolated Docker containers with strict
-resource limits (CPU, memory, no network). Compares output against test
-cases and returns a verdict. Creates per-test-case result records.
+Runs user-submitted code directly via subprocess with the compilers
+installed in the Docker container (g++, javac, python3).
+Compares output against test cases and returns a verdict.
+Creates per-test-case result records.
 """
 
+import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 
 from .models import TestCaseResult
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
-# Configuration
+# Startup: check which compilers are available
 # ---------------------------------------------------------------------------
 
-SANDBOX_IMAGE = 'warcode-sandbox'
+def _check_compiler(name):
+    """Check if a compiler/runtime is available and log the result."""
+    path = shutil.which(name)
+    if path:
+        logger.info("✓ %s found at %s", name, path)
+    else:
+        logger.warning("✗ %s NOT found in PATH", name)
+    return path is not None
 
-# Resource limits for the sandbox container
-CONTAINER_MEMORY = '256m'
-CONTAINER_CPUS = '0.5'
+_COMPILERS_CHECKED = False
+
+def _log_compiler_availability():
+    """Log compiler availability once at startup."""
+    global _COMPILERS_CHECKED
+    if _COMPILERS_CHECKED:
+        return
+    _COMPILERS_CHECKED = True
+    logger.info("=== Compiler availability check ===")
+    _check_compiler('g++')
+    _check_compiler('javac')
+    _check_compiler('java')
+    _check_compiler('python3')
+    logger.info("=== End compiler check ===")
+
+
+# ---------------------------------------------------------------------------
+# Language Configuration
+# ---------------------------------------------------------------------------
 
 LANGUAGE_CONFIG = {
     'python': {
         'filename': 'main.py',
         'compile': None,
-        'run': 'python3 /sandbox/main.py',
+        'run': lambda d: [sys.executable, os.path.join(d, 'main.py')],
     },
     'cpp': {
         'filename': 'main.cpp',
-        'compile': 'g++ /sandbox/main.cpp -o /sandbox/main.exe',
-        'run': '/sandbox/main.exe',
+        'compile': lambda d: ['g++', '-O2', os.path.join(d, 'main.cpp'), '-o', os.path.join(d, 'main.out')],
+        'run': lambda d: [os.path.join(d, 'main.out')],
     },
     'java': {
         'filename': 'Main.java',
-        'compile': 'javac /sandbox/Main.java',
-        'run': 'java -cp /sandbox Main',
+        'compile': lambda d: ['javac', os.path.join(d, 'Main.java')],
+        'run': lambda d: ['java', '-cp', d, 'Main'],
     },
 }
 
 
 # ---------------------------------------------------------------------------
-# Docker helpers
+# Execution helper
 # ---------------------------------------------------------------------------
 
-def _docker_available():
-    """Check if Docker is available and the sandbox image exists."""
-    try:
-        result = subprocess.run(
-            ['docker', 'image', 'inspect', SANDBOX_IMAGE],
-            capture_output=True, timeout=5,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
-def _run_in_docker(command, sandbox_dir, timeout, stdin_data=None):
+def _run_subprocess(command_parts, sandbox_dir, timeout, stdin_data=None):
     """
-    Execute a command inside a Docker container with strict limits.
-
+    Run a command via subprocess with timeout.
     Returns (stdout, stderr, returncode, timed_out, exec_time).
-    """
-    docker_cmd = [
-        'docker', 'run',
-        '--rm',
-        '--network', 'none',           # No internet access
-        '--memory', CONTAINER_MEMORY,   # Memory limit
-        '--cpus', CONTAINER_CPUS,       # CPU limit
-        '--read-only',                  # Read-only root filesystem
-        '--tmpfs', '/tmp:size=64m',     # Small writable /tmp
-        '--user', 'sandbox',           # Non-root user
-        '-v', f'{sandbox_dir}:/sandbox:rw',
-        '-w', '/sandbox',
-        SANDBOX_IMAGE,
-        'bash', '-c', command,
-    ]
-
-    start_time = time.time()
-    timed_out = False
-    try:
-        proc = subprocess.run(
-            docker_cmd,
-            input=stdin_data,
-            capture_output=True,
-            text=True,
-            timeout=timeout + 5,  # Extra 5s for Docker overhead
-        )
-        exec_time = round(time.time() - start_time, 4)
-        return proc.stdout, proc.stderr, proc.returncode, False, exec_time
-    except subprocess.TimeoutExpired:
-        exec_time = round(time.time() - start_time, 4)
-        return '', 'Time Limit Exceeded', -1, True, exec_time
-
-
-def _run_locally(command_parts, sandbox_dir, timeout, stdin_data=None,
-                 is_compile=False):
-    """
-    Fallback: run code locally using subprocess (when Docker is unavailable).
-    Used for local development when Docker is not running.
     """
     start_time = time.time()
     try:
@@ -110,7 +87,7 @@ def _run_locally(command_parts, sandbox_dir, timeout, stdin_data=None,
             input=stdin_data,
             capture_output=True,
             text=True,
-            timeout=timeout if not is_compile else 30,
+            timeout=timeout,
             cwd=sandbox_dir,
         )
         exec_time = round(time.time() - start_time, 4)
@@ -118,30 +95,9 @@ def _run_locally(command_parts, sandbox_dir, timeout, stdin_data=None,
     except subprocess.TimeoutExpired:
         exec_time = round(time.time() - start_time, 4)
         return '', 'Time Limit Exceeded', -1, True, exec_time
-    except FileNotFoundError:
-        return '', f'Compiler/runtime not found.', -1, False, 0
-
-
-# Legacy local-run config (used when Docker is unavailable)
-import sys
-
-LOCAL_LANGUAGE_CONFIG = {
-    'python': {
-        'filename': 'main.py',
-        'compile': None,
-        'run': lambda d: [sys.executable, os.path.join(d, 'main.py')],
-    },
-    'cpp': {
-        'filename': 'main.cpp',
-        'compile': lambda d: ['g++', os.path.join(d, 'main.cpp'), '-o', os.path.join(d, 'main.exe')],
-        'run': lambda d: [os.path.join(d, 'main.exe')],
-    },
-    'java': {
-        'filename': 'Main.java',
-        'compile': lambda d: ['javac', os.path.join(d, 'Main.java')],
-        'run': lambda d: ['java', '-cp', d, 'Main'],
-    },
-}
+    except FileNotFoundError as e:
+        logger.error("Compiler/runtime not found: %s", e)
+        return '', f'Compiler/runtime not found: {e}', -1, False, 0
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +114,9 @@ def run_code(code, language, input_data, time_limit, memory_limit_mb=None):
     if config is None:
         return {'status': 'Runtime Error', 'output': f'Unsupported language: {language}', 'exec_time': None}
 
+    # Log compiler availability once (for debugging deployment issues)
+    _log_compiler_availability()
+
     sandbox = tempfile.mkdtemp(prefix='oj_sandbox_')
 
     try:
@@ -166,21 +125,13 @@ def run_code(code, language, input_data, time_limit, memory_limit_mb=None):
         with open(code_path, 'w', encoding='utf-8') as f:
             f.write(code)
 
-        use_docker = _docker_available()
-
         # --- Compile (if needed) ---
-        if config['compile'] is not None:
-            if use_docker:
-                stdout, stderr, rc, timed_out, _ = _run_in_docker(
-                    config['compile'], sandbox, timeout=30,
-                )
-            else:
-                local_cfg = LOCAL_LANGUAGE_CONFIG[language]
-                compile_cmd = local_cfg['compile'](sandbox)
-                stdout, stderr, rc, timed_out, _ = _run_locally(
-                    compile_cmd, sandbox, timeout=30, is_compile=True,
-                )
-
+        compile_fn = config['compile']
+        if compile_fn is not None:
+            compile_cmd = compile_fn(sandbox)
+            stdout, stderr, rc, timed_out, _ = _run_subprocess(
+                compile_cmd, sandbox, timeout=30,
+            )
             if rc != 0:
                 return {
                     'status': 'Compilation Error',
@@ -189,25 +140,19 @@ def run_code(code, language, input_data, time_limit, memory_limit_mb=None):
                 }
 
         # --- Run ---
-        if use_docker:
-            stdout, stderr, rc, timed_out, exec_time = _run_in_docker(
-                config['run'], sandbox, timeout=time_limit, stdin_data=input_data,
-            )
-        else:
-            local_cfg = LOCAL_LANGUAGE_CONFIG[language]
-            run_cmd = local_cfg['run'](sandbox)
-            stdout, stderr, rc, timed_out, exec_time = _run_locally(
-                run_cmd, sandbox, timeout=time_limit, stdin_data=input_data,
-            )
+        run_cmd = config['run'](sandbox)
+        stdout, stderr, rc, timed_out, exec_time = _run_subprocess(
+            run_cmd, sandbox, timeout=time_limit, stdin_data=input_data,
+        )
 
         if timed_out:
             return {'status': 'Time Limit Exceeded', 'output': 'Time Limit Exceeded.', 'exec_time': exec_time}
 
         if rc != 0:
             error_msg = stderr[:2000] if stderr else 'Non-zero exit code.'
-            # Docker returns exit code 137 for OOM kills
+            # Exit code 137 = OOM kill (SIGKILL from kernel)
             if rc == 137:
-                return {'status': 'Memory Limit Exceeded', 'output': 'Memory Limit Exceeded (killed by container).', 'exec_time': exec_time}
+                return {'status': 'Memory Limit Exceeded', 'output': 'Memory Limit Exceeded.', 'exec_time': exec_time}
             return {'status': 'Runtime Error', 'output': error_msg, 'exec_time': exec_time}
 
         return {'status': 'ok', 'output': stdout.strip(), 'exec_time': exec_time}
@@ -224,14 +169,6 @@ def judge_submission(submission):
 
     Creates a TestCaseResult row for every test case, then sets the overall
     submission.status and submission.output accordingly.
-
-    Possible verdicts:
-        - Accepted
-        - Wrong Answer
-        - Time Limit Exceeded
-        - Runtime Error
-        - Compilation Error
-        - Memory Limit Exceeded
     """
     problem = submission.problem
     language = submission.language

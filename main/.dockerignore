@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+venv/
+.env
+
+# Django dev artifacts
+db.sqlite3
+db.sqlite3-journal
+sent_emails/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Local dev files (not needed in production container)
+Dockerfile.sandbox
+docker-compose.yml
+build.sh
+runtime.txt
+Procfile
+home_output.html
+*.pdf
+
+# Gemini
+.gemini/

@@ -399,8 +399,17 @@ a:hover {
     color: var(--text);
     border-color: var(--border);
     --bs-table-bg: transparent;
+    --bs-table-color: var(--text);
     --bs-table-hover-bg: rgba(255, 255, 255, .03);
+    --bs-table-hover-color: var(--text);
+    --bs-table-striped-bg: rgba(255, 255, 255, .02);
+    --bs-table-striped-color: var(--text);
     margin-bottom: 0;
+}
+
+.table th,
+.table td {
+    color: var(--text);
 }
 
 .table thead th {
@@ -434,6 +443,18 @@ a:hover {
     color: var(--text);
 }
 
+/* Borderless table (used in submission detail) */
+.table-borderless th,
+.table-borderless td {
+    color: var(--text) !important;
+    border: none;
+}
+
+.table-borderless th {
+    color: var(--text-secondary) !important;
+    font-weight: 600;
+}
+
 /* Override Bootstrap table-dark */
 .table-dark,
 .table thead.table-dark,
@@ -443,6 +464,74 @@ thead.table-dark th {
     --bs-table-color: var(--text-secondary);
     background: var(--bg-surface) !important;
     color: var(--text-secondary) !important;
+}
+
+/* ---------- Bootstrap Dark Overrides ---------- */
+
+/* List groups */
+.list-group-item {
+    background-color: var(--bg-card);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+/* Dropdowns */
+.dropdown-menu {
+    background-color: var(--bg-card);
+    border-color: var(--border);
+}
+
+.dropdown-item {
+    color: var(--text);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: var(--bg-card-hover);
+    color: var(--text);
+}
+
+/* Modals */
+.modal-content {
+    background-color: var(--bg-card);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.modal-header,
+.modal-footer {
+    border-color: var(--border);
+}
+
+/* Pagination */
+.page-link {
+    background-color: var(--bg-card);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.page-link:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text);
+}
+
+/* Breadcrumbs */
+.breadcrumb {
+    --bs-breadcrumb-divider-color: var(--text-muted);
+    --bs-breadcrumb-item-active-color: var(--text);
+}
+
+.breadcrumb-item a {
+    color: var(--primary-hover);
+}
+
+/* Force all Bootstrap text utilities to respect dark theme */
+.text-body {
+    color: var(--text) !important;
+}
+
+.text-dark {
+    color: var(--text) !important;
 }
 
 /* ---------- Forms & Inputs ---------- */

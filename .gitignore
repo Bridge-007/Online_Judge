@@ -11,8 +11,13 @@ venv/
 # Django
 db.sqlite3
 *.log
+staticfiles/
+sent_emails/
 
 # IDE
 .vscode/
 .idea/
 *.swp
+
+# Docker
+*.sqlite3-journal

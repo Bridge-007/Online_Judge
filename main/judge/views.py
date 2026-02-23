@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.contrib.auth import login
@@ -16,6 +17,8 @@ from .models import Problem, Submission, Tag
 from .forms import RegistrationForm, SubmissionForm
 from .engine import judge_submission, run_code, LANGUAGE_CONFIG
 
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Home
@@ -23,6 +26,9 @@ from .engine import judge_submission, run_code, LANGUAGE_CONFIG
 def home(request):
     """Landing page with conditional login/register vs dashboard links."""
     return render(request, 'home.html')
+
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +91,7 @@ class ProblemListView(ListView):
             elif status_filter == 'unsolved':
                 qs = qs.exclude(pk__in=solved_ids)
 
-        return qs.distinct()
+        return qs.distinct().order_by('id')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
